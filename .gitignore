@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+/dist/
+/build/
+/MANIFEST
+.cache/
+kotlin_kernel.egg-info/
+.vscode
+tests
