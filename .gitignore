@@ -6,4 +6,3 @@ __pycache__/
 .cache/
 kotlin_kernel.egg-info/
 .vscode
-tests
