@@ -7,13 +7,15 @@ from .context import kotlin_kernel as kk
 from subprocess import Popen, PIPE, STDOUT
 
 
-EXAMPLE_FILE = os.path.join(__file__, '..', 'Hello.kt')
-EXAMPLE_FILE = pathlib.Path(os.path.abspath(EXAMPLE_FILE)).as_uri()
+EXAMPLE_FOLDER = pathlib.Path(os.path.abspath(__file__)).parent
+EXAMPLE_FILE = EXAMPLE_FOLDER.joinpath('Hello.kt')
 
 BINARY = '../kotlin_kernel/java/bin/kotlin-language-server'
 BINARY = os.path.abspath(BINARY)
 
 LOG_LEVELS = {1: 'Error', 2: 'Warning', 3: 'Info', 4: 'Log'}
+
+current_request_id = 1
 
 
 def set_binary(path):
@@ -65,22 +67,8 @@ def send_message(proc, payload):
     send_body(proc, json.dumps(payload))
 
 
-def ls_call(proc, method, **kwargs):
-    """
-    Wraps the send_message method into a more convenient function.
-    """
-    send_message(proc, {
-        'jsonrpc': '2.0',
-        'id': 1,
-        'method': method,
-        'params': kwargs
-    })
-
-
 def read_message(proc):
-    """
-    Reads a message from the language server.
-    """
+    """Reads a message from the language server."""
     content_length = int(proc.stdout.readline()[16:])
     proc.stdout.readline()  # read the \r\n
     response = json.loads(proc.stdout.read(content_length))
@@ -89,22 +77,28 @@ def read_message(proc):
 
 
 def is_method(msg, method):
-    """
-    Tests whether a JSON-RPC message references a given method.
-    """
+    """Tests whether a JSON-RPC message references a given method."""
     return ('method' in msg) and (msg['method'] == method)
 
 
-def read_next(proc, method=None):
+def is_id(msg, msg_id):
+    """Tests whether a JSON-RPC message references a given id."""
+    return ('id' in msg) and (msg['id'] == msg_id)
+
+
+def read_next(proc, method=None, msg_id=None):
     """
     Reads the next message of the specified method (or
     simply the next message if no method is specified) and returns it.
     Handles log messages and errors that occur.
     """
     response = {'method': ''}
-    while not is_method(response, method):
+    got_message = False
+    
+    while not got_message:
         response = read_message(proc)
-        # Handle special message kinds
+        
+        # Print the message while handling special message kinds
         if 'error' in response:
             # Print errors/stack traces to stdout
             error = response['error']
@@ -118,8 +112,45 @@ def read_next(proc, method=None):
             log_msg = log_params['message']
             print(f'{log_level} {log_msg}')
         else:
+            # Print raw JSON
             print(response)
+        
+        got_message = ((method == None) or is_method(response, method)) and ((msg_id == None) or is_id(response, msg_id))
+   
     return response
+
+
+def ls_call(proc, method, **kwargs):
+    """
+    Wraps the send_message method into a more convenient function
+    for language server calls. Returns the response.
+    """
+    global current_request_id
+    
+    req_id = current_request_id
+    send_message(proc, {
+        'jsonrpc': '2.0',
+        'id': req_id,
+        'method': method,
+        'params': kwargs
+    })
+    current_request_id += 1
+    
+    return read_next(proc, msg_id=req_id)
+    
+
+
+def ls_respond(proc, request, **kwargs):
+    """
+    Wraps the send_message method into a more convenient function
+    for responses.
+    """
+    send_message(proc, {
+        'jsonrpc': '2.0',
+        'id': request['id'],
+        'method': request['method'],
+        'params': kwargs
+    })
 
 
 def launch_lang_server():
@@ -128,26 +159,25 @@ def launch_lang_server():
     the started process.
     """
     print(f'Starting language server from {BINARY}')
-    proc = Popen([BINARY], stdout=PIPE, stdin=PIPE, stderr=PIPE)
+    p = Popen([BINARY], stdout=PIPE, stdin=PIPE, stderr=PIPE)
 
-    # Configure the workspace
-    workspace_req = read_next(proc, 'workspace/configuration')
+    # Send an initialize request to the language server
+    ls_call(p, 'initialize',
+        processId=None,
+        rootUri=EXAMPLE_FOLDER.as_uri(),
+        capabilities={}
+    )
     
-    
-    return proc
+    return p
 
 
 def test_hover():
     p = launch_lang_server()
 
     # Now, ask for the hover message
-    ls_call(p, 'textDocument/hover', textDocument={
-        'uri': EXAMPLE_FILE
-    }, position={
-        'line': 1,
-        'character': 9
-    })
+    response = ls_call(p, 'textDocument/hover',
+        textDocument={'uri': EXAMPLE_FILE.as_uri()},
+        position={'line': 1, 'character': 9}
+    )
     
-    response = read_next(p, 'textDocument/hover')
-    
-    assert response.decode('utf-8').contains('inline fun')
+    assert 'inline fun' in response['result']['contents']['value']
