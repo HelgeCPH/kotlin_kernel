@@ -61,9 +61,10 @@ def read_message(proc):
     proc.stdout.readline()  # read the \r\n
     response = json.loads(proc.stdout.read(content_length))
     if 'error' in response:
-      error = response['error']
-      print(error['message'])
-      print(error['data'].replace(r'\r\n', os.linesep))
+        # Print errors/stack traces to stdout
+        error = response['error']
+        print(error['message'])
+        print(error['data'].replace(r'\r\n', os.linesep))
     return response
 
 
@@ -72,6 +73,34 @@ def is_method(msg, method):
     Tests whether a JSON-RPC message references a given method.
     """
     return ('method' in msg) and (msg['method'] == method)
+
+
+def read_next(proc, method):
+    """
+    Waits for the next message of the specified method and returns it.
+    """
+    response = {'method': ''}
+    while not is_method(response, method):
+        response = read_message(proc)
+        print(response)
+    return response
+
+
+def launch_lang_server():
+    """
+    Launches the language server and returns
+    the started process.
+    """
+    print(f'Starting language server from {BINARY}')
+    proc = Popen([BINARY], stdout=PIPE, stdin=PIPE, stderr=PIPE)
+
+    # get the first message after start
+    print(read_message(proc))
+
+    # get the second message after start
+    print(read_message(proc))
+    
+    return proc
 
 
 def test_hover():
@@ -93,14 +122,7 @@ def test_hover():
     payload_json = json.dumps(payload)
     payload_json_utf8 = payload_json.encode('utf-8')
 
-    print(f'Starting language server from {BINARY}')
-    p = Popen([BINARY], stdout=PIPE, stdin=PIPE, stderr=PIPE)
-
-    # get the first message after start
-    print(read_message(p))
-
-    # get the second message after start
-    print(read_message(p))
+    p = launch_lang_server()
 
     # Now, ask for the hover message
     send_header(p, len(payload_json_utf8))
@@ -108,9 +130,6 @@ def test_hover():
     #written_bytes = p.stdin.write(msg)
     #assert written_bytes == len(msg)
 
-    response = {'method': ''}
-    while not is_method(response, 'textDocument/hover'):
-      response = read_message(p)
-      print(response)
+    response = read_next(p, 'textDocument/hover')
     
     assert response.decode('utf-8').contains('inline fun')
