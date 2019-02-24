@@ -47,3 +47,4 @@ That should be it...
 
   * I am planning to add support for a configuration file, so that a `classpath` for the `kotlinc-jvm` session can be set.
   * I started investigating integration of the [Kotlin language server protocol implementation](https://github.com/fwcd/KotlinLanguageServer) for code completion.
+  * Support streaming results. Currently, results of stuff like `generateSequence(0) { it + 1 }.forEach { println(it) }` cannot be displayed (neither stopped, support that too :))
