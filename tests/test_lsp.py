@@ -53,6 +53,28 @@ def send_body(proc, payload):
     proc.stdin.flush()
 
 
+def send_message(proc, payload):
+    """
+    Sends a message to the language server.
+    """
+    payload_json = json.dumps(payload)
+    payload_json_utf8 = payload_json.encode('utf-8')
+    send_header(proc, len(payload_json_utf8))
+    send_body(proc, json.dumps(payload))
+
+
+def ls_call(proc, method, **kwargs):
+    """
+    Wraps the send_message method into a more convenient function.
+    """
+    send_message(proc, {
+        'jsonrpc': '2.0',
+        'id': 1,
+        'method': method,
+        'params': kwargs
+    })
+
+
 def read_message(proc):
     """
     Reads a message from the language server.
@@ -94,42 +116,24 @@ def launch_lang_server():
     print(f'Starting language server from {BINARY}')
     proc = Popen([BINARY], stdout=PIPE, stdin=PIPE, stderr=PIPE)
 
-    # get the first message after start
-    print(read_message(proc))
-
-    # get the second message after start
-    print(read_message(proc))
+    # Configure the workspace
+    workspace_req = read_next(proc, 'workspace/configuration')
+    
     
     return proc
 
 
 def test_hover():
-    payload = {
-            'jsonrpc': '2.0',
-            'id': 1,
-            'method': 'textDocument/hover',
-            'params': {
-              'textDocument': {
-                'uri': EXAMPLE_FILE
-              },
-              'position': {
-                'line': 1,
-                'character': 9
-              }
-            }
-          }
-
-    payload_json = json.dumps(payload)
-    payload_json_utf8 = payload_json.encode('utf-8')
-
     p = launch_lang_server()
 
     # Now, ask for the hover message
-    send_header(p, len(payload_json_utf8))
-    send_body(p, json.dumps(payload))
-    #written_bytes = p.stdin.write(msg)
-    #assert written_bytes == len(msg)
-
+    ls_call(p, 'textDocument/hover', textDocument={
+        'uri': EXAMPLE_FILE
+    }, position={
+        'line': 1,
+        'character': 9
+    })
+    
     response = read_next(p, 'textDocument/hover')
     
     assert response.decode('utf-8').contains('inline fun')
