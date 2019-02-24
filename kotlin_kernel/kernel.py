@@ -7,6 +7,8 @@ from pexpect.replwrap import REPLWrapper, bash
 ANSII_INTERMEDIATE = '\x1b[?1l\x1b>\x1b[?1000l\x1b[?1h\x1b='
 ANSII_INTERMEDIATE_SHORT = '\x1b[?1h\x1b='
 ANSII_RESULT = '\x1b[?1l\x1b>\x1b[?1000l'
+ANSII_INTERMEDIATE_LONG = '\x1b[?1h\x1b=\x1b[?1h\x1b=\x1b[?1h\x1b='
+
 
 class KotlinKernel(Kernel):
     implementation = 'Kotlin'
@@ -55,20 +57,18 @@ class KotlinKernel(Kernel):
         # Filter output. Remove intermediate steps and retain only real outputs
         new_out = []
 
-        for line in result.splitlines()[1:-1]:
+        for line in result.splitlines()[1:]:
             if (line and not line.startswith(ANSII_INTERMEDIATE) and
-                not line.startswith(ANSII_INTERMEDIATE_SHORT)):
+                not line.startswith(ANSII_INTERMEDIATE_SHORT) and
+                not line.startswith('\x1b[70C') and
+                not line.startswith('\x1b[A\x1b') and
+                not line.startswith('\x1b[2C')):
                 if line.startswith(ANSII_RESULT):
                     line = line.replace(ANSII_RESULT, '')
                 new_out.append(line)
         # with open('/tmp/output.txt', 'w') as fp:
         #     fp.write('\n'.join(new_out))
         return '\n'.join(new_out)
-
-    def _clean_input(self, code):
-        lines = code.splitlines()
-        clean_input = '\n'.join([l for l in lines if l])
-        return clean_input
 
     def _is_magic(self, code):
         magic_lines = code.splitlines()
@@ -79,8 +79,15 @@ class KotlinKernel(Kernel):
             return None, None
 
     def _send_to_bash(self, code):
-        res = self.my_shell.run_command(code, timeout=self.cmd_timeout)
-        return res
+        result = self.my_shell.run_command(code, timeout=self.cmd_timeout)
+
+        # Filter output for weird equal signs in `dotnet run` output
+        new_out = []
+        for line in result.splitlines():
+            if line.startswith(ANSII_INTERMEDIATE_LONG):
+                line = line.replace(ANSII_INTERMEDIATE_LONG, '')
+            new_out.append(line)
+        return '\n'.join(new_out)
 
     def do_execute(self, code, silent, store_history=True,
                    user_expressions=None, allow_stdin=False):
