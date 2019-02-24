@@ -6,15 +6,18 @@ import pathlib
 from .context import kotlin_kernel as kk
 from subprocess import Popen, PIPE, STDOUT
 
-
+# The path to the example folder (the folder above this script) and the tested Kotlin file
 EXAMPLE_FOLDER = pathlib.Path(os.path.abspath(__file__)).parent
 EXAMPLE_FILE = EXAMPLE_FOLDER.joinpath('Hello.kt')
 
+# The path to the language server binary. Defaults to the LS in this repository.
 BINARY = os.path.join(__file__, '..', '..', 'kotlin_kernel', 'java', 'bin', 'kotlin-language-server')
 BINARY = os.path.abspath(BINARY)
 
+# Log levels as defined by the LSP in https://microsoft.github.io/language-server-protocol/specification#window_showMessage
 LOG_LEVELS = {1: 'Error', 2: 'Warning', 3: 'Info', 4: 'Log'}
 
+# A global request id to keep track of requests and responses
 current_request_id = 1
 
 
@@ -88,8 +91,8 @@ def is_id(msg, msg_id):
 
 def read_next(proc, method=None, msg_id=None):
     """
-    Reads the next message of the specified method (or
-    simply the next message if no method is specified) and returns it.
+    Reads the next message of the specified method/id (or
+    simply the next message if no method/id is specified) and returns it.
     Handles log messages and errors that occur.
     """
     response = {'method': ''}
@@ -123,10 +126,12 @@ def read_next(proc, method=None, msg_id=None):
 def ls_call(proc, method, **kwargs):
     """
     Wraps the send_message method into a more convenient function
-    for language server calls. Returns the response.
+    for language server calls. Returns the response. This method
+    should be used if the client should send a request to the server.
     """
     global current_request_id
     
+    # Grab a request id and send the request
     req_id = current_request_id
     send_message(proc, {
         'jsonrpc': '2.0',
@@ -136,6 +141,7 @@ def ls_call(proc, method, **kwargs):
     })
     current_request_id += 1
     
+    # Await the response message which has the same id
     return read_next(proc, msg_id=req_id)
     
 
@@ -143,7 +149,8 @@ def ls_call(proc, method, **kwargs):
 def ls_respond(proc, request, **kwargs):
     """
     Wraps the send_message method into a more convenient function
-    for responses.
+    for responses. This method should be used when the server
+    sends a request to the client.
     """
     send_message(proc, {
         'jsonrpc': '2.0',
@@ -180,4 +187,5 @@ def test_hover():
         position={'line': 1, 'character': 9}
     )
     
+    # Test whether the hover request could be performed successfully
     assert 'inline fun' in response['result']['contents']['value']
