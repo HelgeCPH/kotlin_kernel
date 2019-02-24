@@ -13,6 +13,8 @@ EXAMPLE_FILE = pathlib.Path(os.path.abspath(EXAMPLE_FILE)).as_uri()
 BINARY = '../kotlin_kernel/java/bin/kotlin-language-server'
 BINARY = os.path.abspath(BINARY)
 
+LOG_LEVELS = {1: 'Error', 2: 'Warning', 3: 'Info', 4: 'Log'}
+
 
 def set_binary(path):
     """
@@ -82,11 +84,7 @@ def read_message(proc):
     content_length = int(proc.stdout.readline()[16:])
     proc.stdout.readline()  # read the \r\n
     response = json.loads(proc.stdout.read(content_length))
-    if 'error' in response:
-        # Print errors/stack traces to stdout
-        error = response['error']
-        print(error['message'])
-        print(error['data'].replace(r'\r\n', os.linesep))
+    
     return response
 
 
@@ -97,14 +95,30 @@ def is_method(msg, method):
     return ('method' in msg) and (msg['method'] == method)
 
 
-def read_next(proc, method):
+def read_next(proc, method=None):
     """
-    Waits for the next message of the specified method and returns it.
+    Reads the next message of the specified method (or
+    simply the next message if no method is specified) and returns it.
+    Handles log messages and errors that occur.
     """
     response = {'method': ''}
     while not is_method(response, method):
         response = read_message(proc)
-        print(response)
+        # Handle special message kinds
+        if 'error' in response:
+            # Print errors/stack traces to stdout
+            error = response['error']
+            print(error['message'])
+            print(error['data'].replace(r'\r\n', os.linesep))
+        elif is_method(response, 'window/logMessage'):
+            # Print log message
+            log_params = response['params']
+            log_level = LOG_LEVELS[log_params['type']]
+            log_level = f'[{log_level}]'.ljust(10)
+            log_msg = log_params['message']
+            print(f'{log_level} {log_msg}')
+        else:
+            print(response)
     return response
 
 
