@@ -93,6 +93,7 @@ def test_hover():
     payload_json = json.dumps(payload)
     payload_json_utf8 = payload_json.encode('utf-8')
 
+    print(f'Starting language server from {BINARY}')
     p = Popen([BINARY], stdout=PIPE, stdin=PIPE, stderr=PIPE)
 
     # get the first message after start
