@@ -10,7 +10,7 @@ from subprocess import Popen, PIPE, STDOUT
 EXAMPLE_FOLDER = pathlib.Path(os.path.abspath(__file__)).parent
 EXAMPLE_FILE = EXAMPLE_FOLDER.joinpath('Hello.kt')
 
-BINARY = '../kotlin_kernel/java/bin/kotlin-language-server'
+BINARY = os.path.join(__file__, '..', '..', 'kotlin_kernel', 'java', 'bin', 'kotlin-language-server')
 BINARY = os.path.abspath(BINARY)
 
 LOG_LEVELS = {1: 'Error', 2: 'Warning', 3: 'Info', 4: 'Log'}
